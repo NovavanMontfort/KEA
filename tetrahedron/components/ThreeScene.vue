@@ -57,8 +57,10 @@ onMounted(() => {
     model = gltf.scene
     scene.add(model)
     model.position.set(0, 0, 0)
-    model.scale.set(1, 1, 1)
+    model.scale.set(2, 2, 2) //sizing
   })
+
+  //test
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 1)
   scene.add(ambientLight)
@@ -73,11 +75,11 @@ onMounted(() => {
     if (model) {
       // Smooth interpolatie naar target waarden
       model.position.x += (targetX - model.position.x) * 0.1
-      model.rotation.y += (targetRotationY - model.rotation.y) * 0.1
+      model.rotation.y += (targetRotationY - model.rotation.y) * 0.07 // snelheid van draai
 
       // Extra rotatie als er gescrolled wordt
       if (isScrolling) {
-      model.rotation.x += 0.05
+      model.rotation.x += 0.01 // snelheid van draai
     }
 
       //smooth scale
@@ -142,7 +144,7 @@ function handleScroll() {
   }
 
   // Schaal tussen 1 en 1.5 op basis van scrollprogress
-  targetScale = THREE.MathUtils.lerp(1, 1.5, scrollProgress)
+  targetScale = THREE.MathUtils.lerp(1, 5, scrollProgress) //sizing
 }
 </script>
 
