@@ -1,15 +1,12 @@
 <template>
   <div>
-    <section style="height: 100vh;">
-    </section>
+    <section style="height: 100vh;"></section>
 
-    <section class="three-container" ref="threeContainer"></section> <!-- Hier staat je model -->
+    <section class="three-container" ref="threeContainer"></section>
 
-    <section style="height: 2000px;">
-    </section>
+    <section style="height: 2000px;"></section>
   </div>
 </template>
-
 
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue'
@@ -21,17 +18,18 @@ const threeContainer = ref(null)
 let scene, camera, renderer, animationId
 let model = null
 
-let lastScrollY = 0
-let isScrolling = false
 let scrollTimeout = null
+let isScrolling = false
 
-// Target waarden waar het model naar toe beweegt
 let targetX = 0
 let targetRotationY = 0
+let targetRotationZ = 0     // EXTRA - "koprol" animatie
 let targetScale = 1
 
-const visibleLimit = 4.5       // zichtbare grens
-const outOfViewOffset = 1.5   // extra om half van het model buiten beeld te laten
+let floatTime = 0;    // EXTRA - floating animatie
+
+const visibleLimit = 4.5
+const outOfViewOffset = 1.5
 
 onMounted(() => {
   scene = new THREE.Scene()
@@ -57,10 +55,8 @@ onMounted(() => {
     model = gltf.scene
     scene.add(model)
     model.position.set(0, 0, 0)
-    model.scale.set(2, 2, 2) //sizing
+    model.scale.set(2, 2, 2)
   })
-
-  //test
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 1)
   scene.add(ambientLight)
@@ -69,41 +65,17 @@ onMounted(() => {
   directionalLight.position.set(5, 10, 7)
   scene.add(directionalLight)
 
-  const animate = () => {
-    animationId = requestAnimationFrame(animate)
-
-    if (model) {
-      // Smooth interpolatie naar target waarden
-      model.position.x += (targetX - model.position.x) * 0.1
-      model.rotation.y += (targetRotationY - model.rotation.y) * 0.07 // snelheid van draai
-
-      // Extra rotatie als er gescrolled wordt
-      if (isScrolling) {
-      model.rotation.x += 0.01 // snelheid van draai
-    }
-
-      //smooth scale
-      const currentScale = model.scale.x
-      const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1)
-      model.scale.set(newScale, newScale, newScale)
-    }
-
-    renderer.render(scene, camera)
-  }
-
   animate()
 
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('scroll', handleScroll)
-  lastScrollY = window.scrollY
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
+  window.removeEventListener('scroll', handleScroll)
   cancelAnimationFrame(animationId)
   renderer.dispose()
-
-  window.removeEventListener('scroll', handleScroll)
 })
 
 function onWindowResize() {
@@ -117,6 +89,33 @@ function onWindowResize() {
   renderer.setSize(width, height)
 }
 
+function animate() {
+  animationId = requestAnimationFrame(animate)
+
+  if (model) {
+    // Positie op de X-as wordt soepel geïnterpoleerd
+    model.position.x += (targetX - model.position.x) * 0.1
+
+    // Y-rotatie blijft zoals je eerder hebt ingesteld
+    model.rotation.y += (targetRotationY - model.rotation.y) * 0.07
+
+    // EXTRA - "koprol" animatie
+    model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
+ 
+    // Scale interpolatie
+    const currentScale = model.scale.x
+    const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1)
+    model.scale.set(newScale, newScale, newScale)
+
+    // EXTRA - floating animatie
+    floatTime += 0.01; // Pas de snelheid van de beweging aan door de waarde te verhogen of te verlagen
+    model.position.y = Math.sin(floatTime) * 0.1; // 0.1 is de amplitude van de beweging, pas dit aan naar wens
+  }
+
+  renderer.render(scene, camera)
+}
+
+
 function handleScroll() {
   const scrollTop = window.scrollY
   const docHeight = document.body.scrollHeight - window.innerHeight
@@ -126,28 +125,27 @@ function handleScroll() {
   if (scrollTimeout !== null) clearTimeout(scrollTimeout)
   scrollTimeout = setTimeout(() => (isScrolling = false), 100)
 
-  // Scroll progress van 0 -> 1
-  // 0 -> 0.5: model beweegt van midden naar rechts (met punt naar binnen)
-  // 0.5 -> 1: model beweegt van rechts naar links (met punt naar binnen)
-
   const rightEndX = visibleLimit + outOfViewOffset
   const leftEndX = -visibleLimit - outOfViewOffset
 
   if (scrollProgress <= 0.5) {
     const t = scrollProgress * 2
     targetX = THREE.MathUtils.lerp(0, rightEndX, t)
-    targetRotationY = THREE.MathUtils.lerp(0, Math.PI / 2, t)
   } else {
     const t = (scrollProgress - 0.5) * 2
     targetX = THREE.MathUtils.lerp(rightEndX, leftEndX, t)
-    targetRotationY = THREE.MathUtils.lerp(Math.PI / 2, -Math.PI / 2, t)
   }
 
-  // Schaal tussen 1 en 1.5 op basis van scrollprogress
-  targetScale = THREE.MathUtils.lerp(1, 5, scrollProgress) //sizing
+  // Y-rotatie: heen en terug symmetrisch
+  targetRotationY = Math.sin(scrollProgress * Math.PI) * (Math.PI / 2)
+
+    // Z-rotatie: laat ‘m een ronde maken op scroll
+  targetRotationZ = scrollProgress * Math.PI * 2
+
+  // Schaal
+  targetScale = THREE.MathUtils.lerp(1, 3, scrollProgress)
 }
 </script>
-
 
 <style scoped>
 html, body, #__nuxt, #app {
@@ -162,11 +160,11 @@ html, body, #__nuxt, #app {
   left: 0;
   width: 100vw;
   height: 100vh;
-  pointer-events: none; /* zodat scroll en clicks door kunnen */
+  pointer-events: none;
   z-index: 10;
 }
-
 </style>
+
 
 
 
