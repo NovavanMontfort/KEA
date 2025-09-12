@@ -96,11 +96,11 @@ onMounted(() => {
   })
 
   // Ambient light - verlaag intensiteit voor meer schaduwcontrast
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.3)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 2)
   scene.add(ambientLight)
 
   // Directional light met schaduw
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2)
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 2)
   directionalLight.position.set(5, 10, 7)
   directionalLight.castShadow = true
 
@@ -121,9 +121,9 @@ onMounted(() => {
   fillLight.position.set(-5, 5, -5)
   scene.add(fillLight)
 
-
   // Start animation loop
   animate()
+  
 
   // Set up event listeners
   window.addEventListener('resize', onWindowResize)
@@ -179,37 +179,65 @@ function animate() {
 }
 
 // Handle scroll interaction: update animation targets based on scroll progress
+// Scroll-reactie functie: bepaalt hoe het model beweegt en draait op basis van scrollpositie
 function handleScroll() {
+  // Bereken huidige scroll progressie tussen 0 (top) en 1 (onderaan de pagina)
   const scrollTop = window.scrollY
   const docHeight = document.body.scrollHeight - window.innerHeight
   const scrollProgress = Math.min(1, Math.max(0, scrollTop / docHeight))
 
-  // Throttle scroll updates
-  isScrolling = true
-  if (scrollTimeout !== null) clearTimeout(scrollTimeout)
-  scrollTimeout = setTimeout(() => (isScrolling = false), 100)
+  // === DEFINIEER HIER JOUW POSES ===
+  // Elke pose heeft een scroll-positie en de gewenste rotatie & positie van het model
+  const scrollPoses = [
+    {
+      point: 0,                  // Bij 10% scroll
+      rotationY: 0,                // Recht vooruit
+      rotationZ: 0,               // Een kant naar boven
+      positionX: 0                // Links op X-as
+    },
+    {
+      point: 0.5,                  // Midden van de pagina
+      rotationY: 1.57,             // 90 graden naar rechts
+      rotationZ: 0.79,             // Een kant naar boven
+      positionX: 0                 // Gecentreerd
+    },
+    {
+      point: 0.9,                  // Bijna onderaan
+      rotationY: 3.14,             // 180 graden (achterstevoren)
+      rotationZ: 1.57,             // Andere hoek omhoog
+      positionX: 2                 // Rechts op X-as
+    }
+  ]
 
-  const rightEndX = visibleLimit + outOfViewOffset
-  const leftEndX = -visibleLimit - outOfViewOffset
+  // === BEPAAL WELKE TWEE POSES VAN TOEPASSING ZIJN ===
+  let previousPose = scrollPoses[0]
+  let nextPose = scrollPoses[scrollPoses.length - 1]
 
-  // Move from center to right, then left based on scroll
-  if (scrollProgress <= 0.5) {
-    const t = scrollProgress * 2
-    targetX = THREE.MathUtils.lerp(0, rightEndX, t)
-  } else {
-    const t = (scrollProgress - 0.5) * 2
-    targetX = THREE.MathUtils.lerp(rightEndX, leftEndX, t)
+  for (let i = 0; i < scrollPoses.length - 1; i++) {
+    const current = scrollPoses[i]
+    const next = scrollPoses[i + 1]
+
+    // Als scrollProgress tussen deze twee punten valt
+    if (scrollProgress >= current.point && scrollProgress <= next.point) {
+      previousPose = current
+      nextPose = next
+      break
+    }
   }
 
-  // Y-rotatie: back and forth symmetrical
-  targetRotationY = Math.sin(scrollProgress * Math.PI) * (Math.PI / 2)
+  // === BEREKEN HOE VER WE TUSSEN DIE TWEE POSES ZITTEN ===
+  const range = nextPose.point - previousPose.point
+  const t = range === 0 ? 0 : (scrollProgress - previousPose.point) / range
 
-  // Z-rotatie: on scroll
-  targetRotationZ = scrollProgress * Math.PI * 2
+  // === INTERPOLATIE: smooth overgang tussen rotatie en positie ===
+  targetRotationY = THREE.MathUtils.lerp(previousPose.rotationY, nextPose.rotationY, t)
+  targetRotationZ = THREE.MathUtils.lerp(previousPose.rotationZ, nextPose.rotationZ, t)
+  targetX = THREE.MathUtils.lerp(previousPose.positionX, nextPose.positionX, t)
 
-  // Scale
+  // === Optioneel: dynamische schaal op basis van scroll ===
   targetScale = THREE.MathUtils.lerp(1, 2.5, scrollProgress)
 }
+
 </script>
 
 <style scoped>
