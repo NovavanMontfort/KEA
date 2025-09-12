@@ -45,7 +45,11 @@ const outOfViewOffset = 1.5
 onMounted(() => {
   // Create scene and set background color
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x202020)
+  scene.background = new THREE.Color('#F8F8FF')
+
+  // ✅ Eerst scene aanmaken
+  scene = new THREE.Scene()
+  scene.background = new THREE.Color('#F8F8FF')
 
   // Set up camera with perspective projection
   camera = new THREE.PerspectiveCamera(
@@ -58,6 +62,11 @@ onMounted(() => {
 
   // Set up renderer with anti-aliasing and size
   renderer = new THREE.WebGLRenderer({ antialias: true })
+
+  //Activates shadows
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+
   renderer.setSize(
     threeContainer.value.clientWidth,
     threeContainer.value.clientHeight
@@ -70,20 +79,48 @@ onMounted(() => {
   loader.load('/tetrahedron.glb', (gltf) => {
     model = gltf.scene
     scene.add(model)
+
+  //lighting for shadows
+    model.traverse((child) => {
+  if (child.isMesh) {
+    child.castShadow = true
+    child.receiveShadow = true
+    child.material.flatShading = true  // optioneel, voor duidelijke vlakken
+  }
+  })
+
     model.position.set(0, 0, 0)
 
     model.scale.set(1, 1, 1) 
 
   })
 
-  // Add ambient light for general illumination
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1)
+  // Ambient light - verlaag intensiteit voor meer schaduwcontrast
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.3)
   scene.add(ambientLight)
 
-  // Add directional light for depth and shading
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
+  // Directional light met schaduw
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2)
   directionalLight.position.set(5, 10, 7)
+  directionalLight.castShadow = true
+
+  // Shadow instellingen voor betere kwaliteit
+  directionalLight.shadow.mapSize.width = 2048
+  directionalLight.shadow.mapSize.height = 2048
+  directionalLight.shadow.camera.near = 0.5
+  directionalLight.shadow.camera.far = 50
+  directionalLight.shadow.camera.left = -10
+  directionalLight.shadow.camera.right = 10
+  directionalLight.shadow.camera.top = 10
+  directionalLight.shadow.camera.bottom = -10
+
   scene.add(directionalLight)
+
+  // Extra fill light om donkere kanten wat op te lichten
+  const fillLight = new THREE.PointLight(0xffffff, 0.4, 50)
+  fillLight.position.set(-5, 5, -5)
+  scene.add(fillLight)
+
 
   // Start animation loop
   animate()
