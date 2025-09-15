@@ -126,27 +126,25 @@ function animate() {
   animationId = requestAnimationFrame(animate)
 
   if (model) {
-    model.position.x += (targetX - model.position.x) * 0.1
-    model.position.y = THREE.MathUtils.lerp(model.position.y, targetY, 0.1) + Math.sin(floatTime) * 0.1;
+    model.position.x += (targetX - model.position.x) * 0.05 // laat model soepel bewegen naar targetX
 
-    
+    // Scroll-gebaseerde Y-positie + zweven
+    floatTime += 0.01;
+    const floatOffset = Math.sin(floatTime) * 0.1; // bepaald snelheid en hoogte van het zweven
+    model.position.y += (targetY - model.position.y) * 0.4; // bepaald hoe snel het model naar targetY beweegt
+    model.position.y += floatOffset;
+
     model.rotation.y += (targetRotationY - model.rotation.y) * 0.07
     model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
 
     const currentScale = model.scale.x
-    const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1)
+    const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.05)
     model.scale.set(newScale, newScale, newScale)
-
-    // EXTRA - "koprol" animatie
-    model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
-
-    // EXTRA - floating animatie
-    floatTime += 0.01; // Pas de snelheid van de beweging aan door de waarde te verhogen of te verlagen
-    model.position.y = Math.sin(floatTime) * 0.1; // 0.1 is de amplitude van de beweging, pas dit aan naar wens
   }
 
   renderer.render(scene, camera)
 }
+
 
 function handleScroll() {
   const scrollTop = window.scrollY
@@ -169,7 +167,7 @@ function handleScroll() {
   // Y-positie: lineair schuin bewegen (diagonaal)
   // Als targetX helemaal rechts is, dan is targetY maxY (boven)
   // Als targetX helemaal links is, dan is targetY -maxY (onder)
-  const maxY = 8
+  const maxY = 2
   targetY = (targetX / rightEndX) * maxY
 
   // Rotaties zoals voorheen
@@ -181,12 +179,6 @@ function handleScroll() {
   const maxScale = 1.8
   targetScale = maxScale
 }
-
-
-
-
-
-
 </script>
 
 <style scoped>
