@@ -1,0 +1,36 @@
+{
+  "hdr": {
+    "json": "https://api.polyhaven.com/assets?t=hdris",
+    "thumbnailsPathTemplate": "https://cdn.polyhaven.com/asset_img/primary/[filename].png?height=100",
+    "texturePathTemplate": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/[size]/[filename]_[size].hdr",
+    "texture_url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/[size]/studio_small_01_[size].hdr",
+    "use_as_background": true,
+    "skybox": {
+      "enabled": false,
+      "height": 15,
+      "radius": 100,
+      "y": 14
+    },
+    "use_as_environment": true,
+    "customTextureFiles": false,
+    "category": "All",
+    "size": "1k",
+    "backgroundBlurriness": 0.38,
+    "backgroundIntensity": 0.08,
+    "backgroundRotation": {
+      "x": 0,
+      "y": 2.4,
+      "z": 0
+    },
+    "envMapIntensity": 2,
+    "environmentRotation": {
+      "x": 0,
+      "y": 2.4,
+      "z": 0
+    }
+  },
+  "global": {
+    "toneMapping": "OPTIMIZED_CINEON",
+    "toneMappingExposure": 1
+  }
+}
