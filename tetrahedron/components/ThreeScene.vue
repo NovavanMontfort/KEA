@@ -4,7 +4,7 @@
 
     <section class="three-container" ref="threeContainer"></section>
 
-    <section style="height: 2000px;"></section>
+    <section style="height: 5000px;"></section>
   </div>
 </template>
 
@@ -19,6 +19,7 @@ let scene, camera, renderer, animationId
 let model = null
 
 let targetX = 0
+let targetY = 0
 let targetRotationY = 0
 let targetRotationZ = 0
 let targetScale = 1
@@ -28,9 +29,8 @@ let floatTime = 0
 let isScrolling = false
 let scrollTimeout = null
 
-const visibleLimit = 1.5
-const outOfViewOffset = 0.5
-
+const visibleLimit = 3 // Maximale X-positie binnen het zichtbare gebied
+const outOfViewOffset = 1.5 // Extra offset om buiten beeld te gaan
 
 onMounted(() => {
 
@@ -48,6 +48,8 @@ onMounted(() => {
     1000
   )
   camera.position.z = 5
+  
+
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -70,6 +72,7 @@ onMounted(() => {
         child.castShadow = true
         child.receiveShadow = true
         child.material.flatShading = true
+        child.material.needsUpdate = true
       }
     })
 
@@ -77,11 +80,12 @@ onMounted(() => {
     model.scale.set(2, 2, 2)
   })
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.2)
   scene.add(ambientLight)
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-  directionalLight.position.set(5, 10, 7)
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 5)
+  directionalLight.position.set(3, 10, 5) 
+
   directionalLight.castShadow = true
   directionalLight.shadow.mapSize.set(2048, 2048)
   directionalLight.shadow.camera.near = 0.5
@@ -122,19 +126,19 @@ function animate() {
   animationId = requestAnimationFrame(animate)
 
   if (model) {
-    // Positie op de X-as wordt soepel geïnterpoleerd
     model.position.x += (targetX - model.position.x) * 0.1
+    model.position.y = THREE.MathUtils.lerp(model.position.y, targetY, 0.1) + Math.sin(floatTime) * 0.1;
 
-    // Y-rotatie blijft zoals je eerder hebt ingesteld
+    
     model.rotation.y += (targetRotationY - model.rotation.y) * 0.07
-
-    // EXTRA - "koprol" animatie
     model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
- 
-    // Scale interpolatie
+
     const currentScale = model.scale.x
     const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1)
     model.scale.set(newScale, newScale, newScale)
+
+    // EXTRA - "koprol" animatie
+    model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
 
     // EXTRA - floating animatie
     floatTime += 0.01; // Pas de snelheid van de beweging aan door de waarde te verhogen of te verlagen
@@ -144,36 +148,45 @@ function animate() {
   renderer.render(scene, camera)
 }
 
-
 function handleScroll() {
   const scrollTop = window.scrollY
   const docHeight = document.body.scrollHeight - window.innerHeight
   const scrollProgress = Math.min(1, Math.max(0, scrollTop / docHeight))
 
-  isScrolling = true
-  if (scrollTimeout !== null) clearTimeout(scrollTimeout)
-  scrollTimeout = setTimeout(() => (isScrolling = false), 100)
-
+  // Hoe ver het model mag bewegen horizontaal
+  const visibleLimit = 5
+  const outOfViewOffset = 1.5
   const rightEndX = visibleLimit + outOfViewOffset
   const leftEndX = -visibleLimit - outOfViewOffset
 
-  if (scrollProgress <= 0.5) {
-    const t = scrollProgress * 2
-    targetX = THREE.MathUtils.lerp(0, rightEndX, t)
-  } else {
-    const t = (scrollProgress - 0.5) * 2
-    targetX = THREE.MathUtils.lerp(rightEndX, leftEndX, t)
-  }
+  // Hoe vaak het model heen en weer moet bewegen
+  const oscillationCount = 5
+  const oscillation = Math.sin(scrollProgress * Math.PI * oscillationCount)
 
-  // Y-rotatie: heen en terug symmetrisch
-  targetRotationY = Math.sin(scrollProgress * Math.PI) * (Math.PI / 2)
+  // X-positie tussen links en rechts (heen en weer)
+  targetX = THREE.MathUtils.lerp(leftEndX, rightEndX, (oscillation + 1) / 2)
 
-    // Z-rotatie: laat ‘m een ronde maken op scroll
+  // Y-positie: lineair schuin bewegen (diagonaal)
+  // Als targetX helemaal rechts is, dan is targetY maxY (boven)
+  // Als targetX helemaal links is, dan is targetY -maxY (onder)
+  const maxY = 8
+  targetY = (targetX / rightEndX) * maxY
+
+  // Rotaties zoals voorheen
+  targetRotationY = oscillation * (Math.PI / 2)
   targetRotationZ = scrollProgress * Math.PI * 2
 
-  // Schaal
-  targetScale = THREE.MathUtils.lerp(1, 3, scrollProgress)
+  // Schaal vastgezet op maxScale (kan je aanpassen)
+  const minScale = 1
+  const maxScale = 1.8
+  targetScale = maxScale
 }
+
+
+
+
+
+
 </script>
 
 <style scoped>
