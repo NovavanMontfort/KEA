@@ -138,7 +138,7 @@ function animate() {
     model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
 
     const currentScale = model.scale.x
-    const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.05)
+    const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1)
     model.scale.set(newScale, newScale, newScale)
   }
 
