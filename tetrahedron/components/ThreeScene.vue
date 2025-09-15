@@ -70,6 +70,7 @@ onMounted(() => {
     model.scale.set(1, 1, 1)
   })
 
+
   // Lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 2)
   scene.add(ambientLight)
@@ -91,6 +92,7 @@ onMounted(() => {
   scene.add(fillLight)
 
   // Start animation
+
   animate()
 
   // Events
