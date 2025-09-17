@@ -1,9 +1,7 @@
 <template>
   <div>
     <section style="height: 100vh;"></section>
-
     <section class="three-container" ref="threeContainer"></section>
-
     <section style="height: 5000px;"></section>
   </div>
 </template>
@@ -26,6 +24,10 @@ let targetRotationZ = 0
 let targetScale = 1
 
 let floatTime = 0
+
+// pauze-variabelen
+let pauseUntil = 0
+const pauseDuration = 1200 // ms = 1.2s stil blijven staan
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
@@ -53,48 +55,39 @@ onMounted(() => {
   )
   threeContainer.value.appendChild(renderer.domElement)
 
-  // ✅ Load lighting config from JSON
+  // HDR / lighting
   fetch('/lighting.json')
-    .then((res) => res.json())
-    .then((config) => {
+    .then(res => res.json())
+    .then(config => {
       const hdrUrl = config.hdr.texture_url.replace(/\[size\]/g, config.hdr.size)
 
-      // ✅ Tone mapping
-      renderer.toneMapping = THREE.CineonToneMapping // uit JSON: OPTIMIZED_CINEON
+      renderer.toneMapping = THREE.CineonToneMapping
       renderer.toneMappingExposure = config.global.toneMappingExposure || 1
 
-      // ✅ Load HDR
       const rgbeLoader = new RGBELoader()
-      rgbeLoader.load(hdrUrl, (texture) => {
+      rgbeLoader.load(hdrUrl, texture => {
         texture.mapping = THREE.EquirectangularReflectionMapping
 
-        if (config.hdr.use_as_background) {
-          scene.background = texture
-        }
-
-        if (config.hdr.use_as_environment) {
-          scene.environment = texture
-        }
+        if (config.hdr.use_as_background) scene.background = texture
+        if (config.hdr.use_as_environment) scene.environment = texture
 
         console.log('HDR geladen & toegepast')
       })
     })
-    .catch((err) => {
-      console.error('Fout bij laden van lighting.json:', err)
-    })
+    .catch(err => console.error('Fout bij laden van lighting.json:', err))
 
-  // 3D model
+  // Model
   const loader = new GLTFLoader()
-  loader.load('/tetrahedron.glb', (gltf) => {
+  loader.load('/tetrahedron.glb', gltf => {
     model = gltf.scene
     scene.add(model)
 
-    model.traverse((child) => {
+    model.traverse(child => {
       if (child.isMesh) {
         child.castShadow = true
         child.receiveShadow = true
         child.material.flatShading = true
-        child.material.envMapIntensity = 2 // zie JSON
+        child.material.envMapIntensity = 2
         child.material.needsUpdate = true
       }
     })
@@ -116,10 +109,8 @@ onBeforeUnmount(() => {
 
 function onWindowResize() {
   if (!threeContainer.value) return
-
   const width = threeContainer.value.clientWidth
   const height = threeContainer.value.clientHeight
-
   camera.aspect = width / height
   camera.updateProjectionMatrix()
   renderer.setSize(width, height)
@@ -130,7 +121,7 @@ function animate() {
 
   if (model) {
     model.position.x += (targetX - model.position.x) * 0.1
-    model.position.y = THREE.MathUtils.lerp(model.position.y, targetY, 0.1) + Math.sin(floatTime) * 0.1
+    model.position.y = THREE.MathUtils.lerp(model.position.y, targetY, 0.1)
 
     model.rotation.y += (targetRotationY - model.rotation.y) * 0.07
     model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
@@ -147,6 +138,9 @@ function animate() {
 }
 
 function handleScroll() {
+  // als we nog in een pauze zitten → skip updates
+  if (Date.now() < pauseUntil) return
+
   const scrollTop = window.scrollY
   const docHeight = document.body.scrollHeight - window.innerHeight
   const scrollProgress = Math.min(1, Math.max(0, scrollTop / docHeight))
@@ -160,17 +154,20 @@ function handleScroll() {
   const oscillation = Math.sin(scrollProgress * Math.PI * oscillationCount)
 
   targetX = THREE.MathUtils.lerp(leftEndX, rightEndX, (oscillation + 1) / 2)
-
   const maxY = 2
   targetY = (targetX / rightEndX) * maxY
 
   targetRotationY = oscillation * (Math.PI / 2)
   targetRotationZ = scrollProgress * Math.PI * 2
+  targetScale = 1.8
 
-  const maxScale = 1.8
-  targetScale = maxScale
+  // 🚩 check of we bij links/rechts zijn → pauze starten
+  if (Math.abs(targetX - rightEndX) < 0.05 || Math.abs(targetX - leftEndX) < 0.05) {
+    pauseUntil = Date.now() + pauseDuration
+  }
 }
 </script>
+
 
 
 <style scoped>
@@ -182,14 +179,15 @@ html, body, #__nuxt, #app {
 
 .three-container {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0; /* korter dan top/left/width/height */
   width: 100vw;
   height: 100vh;
   pointer-events: none;
   z-index: 10;
 }
 </style>
+
+
 
 
 
