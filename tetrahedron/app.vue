@@ -1,10 +1,4 @@
 <template>
-  <MainScene />
-  <ThreeScene />
+  <NuxtPage />
 </template>
-
-<script setup>
-import MainScene from './components/MainScene.vue';
-import ThreeScene from './components/ThreeScene.vue'
-</script>
 
