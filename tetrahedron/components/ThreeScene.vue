@@ -36,47 +36,73 @@ onMounted(() => {
 
   // Scene maken
   scene = new THREE.Scene()
-  scene.background = new THREE.Color('#F8F8FF')
+  // scene.background = new THREE.Color('#ffffff')
 
-  // Camera instellen
+  // Camera instellen (default FOV, wordt ook bij resize aangepast)
   camera = new THREE.PerspectiveCamera(
     75,
     threeContainer.value.clientWidth / threeContainer.value.clientHeight,
     0.1,
     1000
   )
-  camera.position.z = 5
+  camera.position.z = window.innerWidth < 768 ? 6.5 : 5
+
 
   // Renderer instellen
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
+
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 2
+
+
+  // 🔑 Belangrijk voor scherpe weergave op mobiel (retina schermen)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+
   renderer.setSize(
     threeContainer.value.clientWidth,
     threeContainer.value.clientHeight
   )
   threeContainer.value.appendChild(renderer.domElement)
 
-  // HDR / belichting config laden
-  fetch('/lighting2.json')
-    .then(res => res.json())
-    .then(config => {
-      const hdrUrl = config.hdr.texture_url.replace(/\[size\]/g, config.hdr.size)
+// HDRI environment LIGHTING
+const rgbeLoader = new RGBELoader()
+rgbeLoader.load('/lighting.hdr', texture => {
+  texture.mapping = THREE.EquirectangularReflectionMapping
 
-      renderer.toneMapping = THREE.CineonToneMapping
-      renderer.toneMappingExposure = config.global.toneMappingExposure || 1
+  scene.environment = texture // reflecties
+  scene.background = new THREE.Color('#FFDFF0') // neutrale achtergrond
+})
 
-      const rgbeLoader = new RGBELoader()
-      rgbeLoader.load(hdrUrl, texture => {
-        texture.mapping = THREE.EquirectangularReflectionMapping
+  // Licht toevoegen aan de scene
+setupLights(scene)
 
-        if (config.hdr.use_as_background) scene.background = texture
-        if (config.hdr.use_as_environment) scene.environment = texture
+  // Licht toevoegen aan de scene
+function setupLights(scene) {
+  // zacht basislicht (vult schaduwen een beetje op)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
+  scene.add(ambientLight)
 
-        console.log('HDR geladen & toegepast')
-      })
-    })
-    .catch(err => console.error('Fout bij laden van lighting.json:', err))
+  // hoofdlicht, alsof het de zon is
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
+  directionalLight.position.set(5, 10, 5) // positie (x,y,z)
+  directionalLight.castShadow = true
+  directionalLight.shadow.mapSize.width = 2048
+  directionalLight.shadow.mapSize.height = 2048
+  scene.add(directionalLight)
+
+  // accentlicht van voren
+  const pointLight = new THREE.PointLight(0xffffff, 0.6)
+  pointLight.position.set(-5, 5, -5)
+  scene.add(pointLight)
+
+  // optioneel: klein randlicht voor glans
+  const rimLight = new THREE.SpotLight(0xffffff, 0.8, 50, Math.PI / 6, 0.25, 1)
+  rimLight.position.set(0, 5, 10)
+  scene.add(rimLight)
+}
+
 
   // 3D model laden
   const loader = new GLTFLoader()
@@ -84,24 +110,43 @@ onMounted(() => {
     model = gltf.scene
     scene.add(model)
 
-// door alle meshes lopen → schaduwen & materiaal instellen
+    // door alle meshes lopen → schaduwen & materiaal instellen
     model.traverse(child => {
-      if (child.isMesh) {
-        child.castShadow = true
-        child.receiveShadow = true
-        child.material.flatShading = true
-        child.material.envMapIntensity = 2
-        child.material.needsUpdate = true
-      }
-    })
+  if (child.isMesh) {
+    child.castShadow = true
+    child.receiveShadow = true
 
+    // pak de originele kleur van het glb-materiaal
+    const origColor = child.material.color.clone()
+
+    child.material = new THREE.MeshPhysicalMaterial({
+      color: origColor, // behoudt de glb-kleur
+      // metalness: 0.8,
+      roughness: 0.2,
+      clearcoat: 1,
+      clearcoatRoughness: 0.05,
+      flatShading: false,
+      envMapIntensity: 1.5
+    })
+  }
+})
+
+
+
+    // startpositie model
     model.position.set(0, 0, 0)
-    model.scale.set(2, 2, 2)
+
+    // 🔑 Schaal afhankelijk van schermbreedte
+    const scaleFactor = window.innerWidth < 768 ? 1.5 : 2
+    model.scale.set(scaleFactor, scaleFactor, scaleFactor)
   })
 
   // animatie starten
   animate()
   window.addEventListener('resize', onWindowResize)
+
+  // initial resize uitvoeren zodat alles klopt bij eerste load
+  onWindowResize()
 })
 
 onBeforeUnmount(() => {
@@ -117,8 +162,16 @@ function onWindowResize() {
   if (!threeContainer.value) return
   const width = threeContainer.value.clientWidth
   const height = threeContainer.value.clientHeight
+
+  // 🔑 Camera FOV aanpassen voor mobiel (iets wijder zodat object in beeld blijft)
+  if (width < 768) {
+    camera.fov = 85
+  } else {
+    camera.fov = 75
+  }
   camera.aspect = width / height
   camera.updateProjectionMatrix()
+
   renderer.setSize(width, height)
 }
 
@@ -157,11 +210,18 @@ function handleScroll() {
 
   const scrollTop = window.scrollY
   const docHeight = document.body.scrollHeight - window.innerHeight
-  const scrollProgress = Math.min(1, Math.max(0, scrollTop / docHeight))
+
+  // 🔑 Op mobiel scrollt men vaak minder → iets gevoeliger maken
+  const scrollProgress = Math.min(
+    1,
+    Math.max(0, scrollTop / (docHeight * (window.innerWidth < 768 ? 0.6 : 1)))
+  )
 
   // grenzen & oscillatie
-  const visibleLimit = 5
-  const outOfViewOffset = 1.5
+  const visibleLimit = window.innerWidth < 768 ? 1.8 : 5
+  const outOfViewOffset = window.innerWidth < 768 ? 0.5 : 1.5
+
+
   const rightEndX = visibleLimit + outOfViewOffset
   const leftEndX = -visibleLimit - outOfViewOffset
 
@@ -199,11 +259,17 @@ html, body, #__nuxt, #app {
   position: fixed;
   inset: 0; /* zelfde als top/left/right/bottom = 0 */
   width: 100vw;
-  height: 100vh;
+
+  /* 🔑 Gebruik dynamic viewport height → beter voor mobiel/iOS Safari */
+  height: 100dvh;
+
   pointer-events: none; /* klikken gaat erdoorheen */
   z-index: 10;
 }
 </style>
+
+
+
 
 
 
