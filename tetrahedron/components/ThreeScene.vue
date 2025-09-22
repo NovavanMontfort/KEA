@@ -1,5 +1,6 @@
 <template>
   <div>
+    <!-- Container voor de 3D scene -->
     <section class="three-container" ref="threeContainer"></section>
   </div>
 </template>
@@ -10,200 +11,208 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
 
+/**
+ * DOM referentie waar het Three.js canvas in wordt geplaatst
+ */
 const threeContainer = ref(null)
 
-// basis Three.js objecten
+/**
+ * Basis Three.js objecten
+ */
 let scene, camera, renderer, animationId
 let model = null
 
-// animatie-doelen 
+/**
+ * Animatie-doelen (hier beweegt/scaled/roteert het model naartoe)
+ */
 let targetX = 0
 let targetY = 0
 let targetRotationY = 0
 let targetRotationZ = 0
 let targetScale = 1
 
-// voor "float"-effect
+// Variabele om een “zweef”-effect te berekenen
 let floatTime = 0
 
-// scroll-pauze variabelen
+// Scroll-pauze variabelen → zorgen ervoor dat het model soms even stil blijft staan
 let pauseUntil = 0
-const pauseDuration = 1200 // 1.2s stilstaan
-let pauseScrollY = 0       // onthoud scrollTop bij start pauze
+const pauseDuration = 1200 // pauze van 1.2 seconden
+let pauseScrollY = 0       // onthoudt scrollpositie bij start van de pauze
 
 onMounted(() => {
+  // Luister naar scroll events
   window.addEventListener('scroll', handleScroll)
 
-  // Scene maken
+  // Scene maken (dit is de “wereld” waar alles in staat)
   scene = new THREE.Scene()
-  // scene.background = new THREE.Color('#ffffff')
+  scene.background = new THREE.Color('#ffffff') // standaard achtergrondkleur
 
-  // Camera instellen (default FOV, wordt ook bij resize aangepast)
+  // Camera instellen (bepaalt vanuit welk punt je kijkt)
   camera = new THREE.PerspectiveCamera(
-    75,
-    threeContainer.value.clientWidth / threeContainer.value.clientHeight,
-    0.1,
-    1000
+  75, // Field of View (hoe “wijd” de camera kijkt)
+  threeContainer.value.clientWidth / threeContainer.value.clientHeight, // aspect ratio → breedte/hoogte van het canvas
+  0.1, // dichtbij-plane → alles dichterbij dan 0.1 wordt niet getekend
+  1000 // verweg-plane → alles verder weg dan 1000 wordt niet getekend
   )
+  // Zet de camera iets verder weg op mobiel, zodat het object goed in beeld blijft
   camera.position.z = window.innerWidth < 768 ? 6.5 : 5
 
 
-  // Renderer instellen
-  renderer = new THREE.WebGLRenderer({ antialias: true })
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  // Renderer instellen (tekenen naar het canvas in de browser)
+  renderer = new THREE.WebGLRenderer({ antialias: true }) // maakt randen gladder
+  renderer.shadowMap.enabled = true // schaduwen aanzetten
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap // zachtere schaduwen
 
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 2
+  renderer.toneMapping = THREE.ACESFilmicToneMapping // mooiere belichting (filmisch)
+  renderer.toneMappingExposure = 2 // belichting iets sterker maken
 
-
-  // 🔑 Belangrijk voor scherpe weergave op mobiel (retina schermen)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)) // zorgt voor scherp beeld op retina-schermen
   renderer.setSize(
     threeContainer.value.clientWidth,
     threeContainer.value.clientHeight
   )
+  // Voeg het canvas toe aan de HTML (anders zie je niks)
   threeContainer.value.appendChild(renderer.domElement)
 
-// HDRI environment LIGHTING
-const rgbeLoader = new RGBELoader()
-rgbeLoader.load('/lighting.hdr', texture => {
-  texture.mapping = THREE.EquirectangularReflectionMapping
 
-  scene.environment = texture // reflecties
-  scene.background = new THREE.Color('#FFDFF0') // neutrale achtergrond
-})
+  // HDRI environment → zorgt voor realistische belichting/reflecties
+  const rgbeLoader = new RGBELoader()
+  rgbeLoader.load('/lighting.hdr', texture => {
+    texture.mapping = THREE.EquirectangularReflectionMapping
+    scene.environment = texture
+    scene.background = new THREE.Color('#FFDFF0') // neutrale achtergrond
+  })
 
-  // Licht toevoegen aan de scene
-setupLights(scene)
+  // Basis belichting toevoegen
+  setupLights(scene)
 
-  // Licht toevoegen aan de scene
-function setupLights(scene) {
-  // zacht basislicht (vult schaduwen een beetje op)
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
-  scene.add(ambientLight)
-
-  // hoofdlicht, alsof het de zon is
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-  directionalLight.position.set(5, 10, 5) // positie (x,y,z)
-  directionalLight.castShadow = true
-  directionalLight.shadow.mapSize.width = 2048
-  directionalLight.shadow.mapSize.height = 2048
-  scene.add(directionalLight)
-
-  // accentlicht van voren
-  const pointLight = new THREE.PointLight(0xffffff, 0.6)
-  pointLight.position.set(-5, 5, -5)
-  scene.add(pointLight)
-
-  // optioneel: klein randlicht voor glans
-  const rimLight = new THREE.SpotLight(0xffffff, 0.8, 50, Math.PI / 6, 0.25, 1)
-  rimLight.position.set(0, 5, 10)
-  scene.add(rimLight)
-}
-
-
-  // 3D model laden
+  // 3D model laden (GLB bestand)
   const loader = new GLTFLoader()
   loader.load('/tetrahedron.glb', gltf => {
     model = gltf.scene
     scene.add(model)
 
-    // door alle meshes lopen → schaduwen & materiaal instellen
+    // Loop door alle meshes in het model
     model.traverse(child => {
-  if (child.isMesh) {
-    child.castShadow = true
-    child.receiveShadow = true
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
 
-    // pak de originele kleur van het glb-materiaal
-    const origColor = child.material.color.clone()
+        // originele kleur uit bestand ophalen
+        const origColor = child.material.color.clone()
 
-    child.material = new THREE.MeshPhysicalMaterial({
-      color: origColor, // behoudt de glb-kleur
-      // metalness: 0.8,
-      roughness: 0.2,
-      clearcoat: 1,
-      clearcoatRoughness: 0.05,
-      flatShading: false,
-      envMapIntensity: 1.5
+        // nieuw fysiek materiaal toewijzen (glans/reflexie)
+        child.material = new THREE.MeshPhysicalMaterial({
+          color: origColor,
+          roughness: 0.2,
+          clearcoat: 1,
+          clearcoatRoughness: 0.05,
+          flatShading: false,
+          envMapIntensity: 1.5
+        })
+      }
     })
-  }
-})
 
+  // Startpositie & schaal instellen
+  model.position.set(0, 0, 0) // zet het model in het midden
+  // Op mobiel iets kleiner maken, zodat het in beeld past
+  const scaleFactor = window.innerWidth < 768 ? 1.5 : 2
+  model.scale.set(scaleFactor, scaleFactor, scaleFactor)
 
-
-    // startpositie model
-    model.position.set(0, 0, 0)
-
-    // 🔑 Schaal afhankelijk van schermbreedte
-    const scaleFactor = window.innerWidth < 768 ? 1.5 : 2
-    model.scale.set(scaleFactor, scaleFactor, scaleFactor)
   })
 
-  // animatie starten
+  // Start animatie-loop
   animate()
-  window.addEventListener('resize', onWindowResize)
 
-  // initial resize uitvoeren zodat alles klopt bij eerste load
-  onWindowResize()
+  // Luister naar window-resizes
+  window.addEventListener('resize', onWindowResize)
+  onWindowResize() // eerste keer direct uitvoeren
 })
 
 onBeforeUnmount(() => {
-  // listeners opruimen
+  // Opruimen wanneer component verdwijnt
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', onWindowResize)
   cancelAnimationFrame(animationId)
   renderer.dispose()
 })
 
-// herbereken canvas bij resize
+/**
+ * Functie om licht toe te voegen aan de scene
+ */
+function setupLights(scene) {
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4) // zacht basislicht
+  scene.add(ambientLight)
+
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1) // zonlicht
+  directionalLight.position.set(5, 10, 5)
+  directionalLight.castShadow = true
+  directionalLight.shadow.mapSize.width = 2048
+  directionalLight.shadow.mapSize.height = 2048
+  scene.add(directionalLight)
+
+  const pointLight = new THREE.PointLight(0xffffff, 0.6) // extra licht van voren
+  pointLight.position.set(-5, 5, -5)
+  scene.add(pointLight)
+
+  const rimLight = new THREE.SpotLight(0xffffff, 0.8, 50, Math.PI / 6, 0.25, 1) // randlicht voor glans
+  rimLight.position.set(0, 5, 10)
+  scene.add(rimLight)
+}
+
+/**
+ * Functie om canvas & camera aan te passen bij window resize
+ */
 function onWindowResize() {
   if (!threeContainer.value) return
   const width = threeContainer.value.clientWidth
   const height = threeContainer.value.clientHeight
 
-  // 🔑 Camera FOV aanpassen voor mobiel (iets wijder zodat object in beeld blijft)
-  if (width < 768) {
-    camera.fov = 85
-  } else {
-    camera.fov = 75
-  }
-  camera.aspect = width / height
-  camera.updateProjectionMatrix()
+  // andere camera-instelling voor mobiel
+  camera.fov = width < 768 ? 85 : 75 // Pas Field of View aan: mobiel krijgt iets wijdere lens
+  camera.aspect = width / height // verhouding aanpassen aan scherm
+  camera.updateProjectionMatrix() // herbereken projectie
 
-  renderer.setSize(width, height)
+  renderer.setSize(width, height) // canvas opnieuw schalen
 }
 
-// animatie-loop
+/**
+ * Animatie-loop → draait elke frame
+ */
 function animate() {
   animationId = requestAnimationFrame(animate)
 
   if (model) {
-    // model beweegt langzaam richting target waardes
+    // Positie en rotatie bewegen langzaam naar target waarden
+    // X-positie geleidelijk naar targetX
     model.position.x += (targetX - model.position.x) * 0.1
+    // Y-positie vloeiend naar targetY
     model.position.y = THREE.MathUtils.lerp(model.position.y, targetY, 0.1)
 
+    // Rotaties langzaam bijwerken
     model.rotation.y += (targetRotationY - model.rotation.y) * 0.07
     model.rotation.z += (targetRotationZ - model.rotation.z) * 0.07
 
+    // Schaal langzaam aanpassen naar targetScale
     const currentScale = model.scale.x
     const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1)
     model.scale.set(newScale, newScale, newScale)
 
-    // zweef-effect (sinus golf)
+    // zweef-effect
     floatTime += 0.01
     model.position.y = Math.sin(floatTime) * 0.1
   }
 
+  // Scene tekenen
   renderer.render(scene, camera)
 }
 
-// scroll event → bepaalt target-waardes
+/**
+ * Scroll event → bepaalt hoe het model beweegt bij scrollen
+ */
 function handleScroll() {
-  // check of pauze actief is
+  // Als er een pauze actief is → bevries de scrollpositie
   if (Date.now() < pauseUntil) {
-    // scroll terugzetten naar punt van pauze → "freeze" pagina
     window.scrollTo(0, pauseScrollY)
     return
   }
@@ -211,40 +220,68 @@ function handleScroll() {
   const scrollTop = window.scrollY
   const docHeight = document.body.scrollHeight - window.innerHeight
 
-  // 🔑 Op mobiel scrollt men vaak minder → iets gevoeliger maken
+  // Op mobiel iets gevoeliger scrollen
   const scrollProgress = Math.min(
-    1,
-    Math.max(0, scrollTop / (docHeight * (window.innerWidth < 768 ? 0.6 : 1)))
+  1, // max 1
+  Math.max(0, scrollTop / (docHeight * (window.innerWidth < 768 ? 0.6 : 1)))
   )
+  // → scrollProgress loopt van 0 (bovenaan) tot 1 (onderaan)
+  // Op mobiel iets gevoeliger gemaakt (0.6)
 
-  // grenzen & oscillatie
+
+  // Grenzen waarbinnen het model mag bewegen
+  // Grenzen instellen (verschil desktop/mobiel)
   const visibleLimit = window.innerWidth < 768 ? 1.8 : 5
   const outOfViewOffset = window.innerWidth < 768 ? 0.5 : 1.5
-
-
   const rightEndX = visibleLimit + outOfViewOffset
   const leftEndX = -visibleLimit - outOfViewOffset
 
-  const oscillationCount = 5
-  const oscillation = Math.sin(scrollProgress * Math.PI * oscillationCount)
+// Hoe vaak het model heen-en-weer slingert tijdens de volledige scroll
+const oscillationCount = 5 
 
-  // target posities/rotaties schalen met scroll
-  targetX = THREE.MathUtils.lerp(leftEndX, rightEndX, (oscillation + 1) / 2)
-  const maxY = 2
-  targetY = (targetX / rightEndX) * maxY
+// Maak een golf (sinus) die soepel heen-en-weer beweegt tussen -1 en 1
+const oscillation = Math.sin(scrollProgress * Math.PI * oscillationCount)
 
-  targetRotationY = oscillation * (Math.PI / 2)
-  targetRotationZ = scrollProgress * Math.PI * 2
-  targetScale = 1.8
+// Horizontale positie (X-as):
+// - lerp() kiest een punt tussen leftEndX en rightEndX
+// - (oscillation + 1) / 2 zet de sinus (-1..1) om naar een bruikbare waarde (0..1)
+targetX = THREE.MathUtils.lerp(leftEndX, rightEndX, (oscillation + 1) / 2)
 
-  // check of we bij links/rechts zijn → pauze starten
-  if (
-    Math.abs(targetX - rightEndX) < 0.05 ||
-    Math.abs(targetX - leftEndX) < 0.05
-  ) {
-    pauseUntil = Date.now() + pauseDuration
-    pauseScrollY = scrollTop // sla huidige scrollpositie op
-  }
+// Verticale positie (Y-as):
+// - maxY bepaalt hoe hoog het model maximaal beweegt
+// - positie is gekoppeld aan targetX, zodat hij iets op en neer zweeft tijdens het heen-en-weer schuiven
+const maxY = 2
+targetY = (targetX / rightEndX) * maxY
+
+// Rotatie om de Y-as (links/rechts draaien):
+// - oscillation bepaalt hoe ver het draait
+// - Math.PI/2 = maximaal 90° draai
+targetRotationY = oscillation * (Math.PI / 2)
+
+// Rotatie om de Z-as (rollen/spinnen):
+// - recht evenredig met scrollProgress
+// - Math.PI * 2 = precies één volledige spin tijdens de hele scroll
+targetRotationZ = scrollProgress * Math.PI * 2
+
+// Schaal grootte:
+// - hier vastgezet op 1.8x
+// - zou je dit dynamisch maken met scrollProgress, dan groeit het model tijdens scroll
+targetScale = 1.8
+
+// Check of het model bijna aan de linker- of rechterrand is
+// - Math.abs(...) < 0.05 = kleine marge om te bepalen of het "bij de rand" staat
+// Als dat zo is → zet een pauze in de animatie
+if (
+  Math.abs(targetX - rightEndX) < 0.05 || // bij de rechterrand
+  Math.abs(targetX - leftEndX) < 0.05    // bij de linkerrand
+) {
+  // Pauzeer animatie tot (nu + pauseDuration)
+  pauseUntil = Date.now() + pauseDuration
+
+  // Onthoud huidige scrollpositie, zodat de pagina niet verder kan scrollen tijdens de pauze
+  pauseScrollY = scrollTop
+}
+
 }
 </script>
 
@@ -257,16 +294,16 @@ html, body, #__nuxt, #app {
 
 .three-container {
   position: fixed;
-  inset: 0; /* zelfde als top/left/right/bottom = 0 */
+  inset: 0;
   width: 100vw;
 
-  /* 🔑 Gebruik dynamic viewport height → beter voor mobiel/iOS Safari */
   height: 100dvh;
 
-  pointer-events: none; /* klikken gaat erdoorheen */
+  pointer-events: none; 
   z-index: 10;
 }
 </style>
+
 
 
 
